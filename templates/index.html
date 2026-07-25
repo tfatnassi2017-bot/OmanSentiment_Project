@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block sub %}نبني قاعدة بيانات مفتوحة لجمل عمانية حقيقية مع مشاعرها، عشان نطور أدوات تفهم لهجتنا زين.{% endblock %}
+
+{% block extra_head %}
+<style>
+  .consent{
+    background:var(--teal-deep); color:#EFE7D0; border-radius:14px; padding:14px 16px;
+    font-size:13px; line-height:1.9; margin-bottom:18px;
+  }
+  .consent b{ color:#fff; }
+  .topic-row{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .topic-label{ font-size:12px; color:var(--copper-deep); font-weight:800; margin-bottom:6px; }
+  .prompt{ font-size:19px; font-weight:700; color:var(--teal-deep); line-height:1.6; }
+  .shuffle{
+    flex:0 0 auto; background:none; border:1px solid var(--line); color:var(--teal-mid);
+    border-radius:10px; padding:8px 10px; font-size:12.5px; cursor:pointer; white-space:nowrap;
+  }
+  .shuffle:hover{ background:var(--sand); }
+  textarea{
+    width:100%; margin-top:14px; min-height:96px; resize:vertical;
+    border:1.5px solid var(--line); border-radius:12px; padding:12px 14px;
+    font-family:'Tajawal',sans-serif; font-size:16px; color:var(--ink); background:#fff; direction:rtl;
+  }
+  textarea:focus{ outline:2px solid var(--teal-mid); outline-offset:1px; border-color:var(--teal-mid); }
+  .count{ font-size:11.5px; color:var(--ink-soft); text-align:left; margin-top:4px; }
+  .sent-label{ font-size:13px; color:var(--ink-soft); margin:16px 0 8px; font-weight:700; }
+  .sent-row{ display:flex; gap:8px; }
+  .sent-btn{
+    flex:1; border-radius:12px; padding:12px 6px; font-size:14.5px; font-weight:700; cursor:pointer;
+    border:1.5px solid var(--line); background:#fff; color:var(--ink-soft);
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+  }
+  .sent-btn .emo{ font-size:20px; }
+  .sent-btn.active-pos{ background:#E7F3EA; border-color:var(--pos); color:var(--pos); }
+  .sent-btn.active-neg{ background:#FBEAE7; border-color:var(--neg); color:var(--neg); }
+  .sent-btn.active-neu{ background:#F2EEDF; border-color:var(--neu); color:var(--neu); }
+  .submit{
+    width:100%; margin-top:16px; background:var(--copper); color:#fff; border:none;
+    padding:14px; border-radius:12px; font-size:16px; font-weight:800; cursor:pointer;
+  }
+  .submit:disabled{ background:#D8C9AC; cursor:not-allowed; }
+  .submit:not(:disabled):hover{ background:var(--copper-deep); }
+  .msg{ text-align:center; font-size:13.5px; margin-top:10px; min-height:18px; }
+  .msg.ok{ color:var(--pos); font-weight:700; }
+  .msg.err{ color:var(--neg); font-weight:700; }
+  .footer{ margin-top:20px; padding-top:16px; border-top:1px dashed var(--line); text-align:center; }
+  .stat{ font-size:13px; color:var(--ink-soft); }
+  .stat b{ color:var(--teal-deep); font-size:16px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="consent">
+  <b>قبل ما تبدأ:</b> إجابتك بتكون جزء من بيانات بحثية مفتوحة (تحليل لهجات ومشاعر) ينشرها الباحث ضمن رسالة دكتوراه.
+  لا تكتب اسمك أو أي معلومة تعرّف فيك شخصياً. المشاركة اختيارية بالكامل، ولك الحق تتوقف بأي وقت.
+  اكتب بلهجتك الطبيعية تماماً — زي ما تحچي مع أصحابك.
+</div>
+
+<div class="card">
+  <div class="topic-row">
+    <div>
+      <div class="topic-label" id="topicLabel">الموضوع</div>
+      <div class="prompt" id="promptText">تحميل...</div>
+    </div>
+    <button class="shuffle" id="shuffleBtn" type="button">🔄 غيّر الموضوع</button>
+  </div>
+
+  <textarea id="sentenceInput" maxlength="240" placeholder="اكتب جملة أو جملتين بلهجتك العمانية هنا..."></textarea>
+  <div class="count"><span id="charCount">0</span>/240</div>
+
+  <div class="sent-label">شنو شعورك تجاه اللي كتبته؟</div>
+  <div class="sent-row">
+    <button class="sent-btn" data-val="positive" type="button"><span class="emo">😊</span>إيجابي</button>
+    <button class="sent-btn" data-val="neutral" type="button"><span class="emo">😐</span>محايد</button>
+    <button class="sent-btn" data-val="negative" type="button"><span class="emo">😞</span>سلبي</button>
+  </div>
+
+  <button class="submit" id="submitBtn" type="button">إرسال الجملة</button>
+  <div class="msg" id="msgBox"></div>
+</div>
+
+<div class="footer">
+  <div class="stat">إجمالي المساهمات حتى الآن: <b id="totalCount">—</b></div>
+</div>
+
+<script>
+const topics = {{ topics | tojson }};
+let currentTopic = null;
+let selectedSentiment = null;
+
+const promptText = document.getElementById('promptText');
+const topicLabel = document.getElementById('topicLabel');
+const sentenceInput = document.getElementById('sentenceInput');
+const charCount = document.getElementById('charCount');
+const submitBtn = document.getElementById('submitBtn');
+const msgBox = document.getElementById('msgBox');
+const totalCount = document.getElementById('totalCount');
+const sentBtns = document.querySelectorAll('.sent-btn');
+
+function pickTopic(){
+  const t = topics[Math.floor(Math.random()*topics.length)];
+  currentTopic = t;
+  topicLabel.textContent = 'الموضوع: ' + t[1];
+  promptText.textContent = t[2];
+}
+document.getElementById('shuffleBtn').addEventListener('click', pickTopic);
+
+sentenceInput.addEventListener('input', () => { charCount.textContent = sentenceInput.value.length; });
+
+sentBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    selectedSentiment = btn.dataset.val;
+    sentBtns.forEach(b => b.className = 'sent-btn');
+    const cls = selectedSentiment === 'positive' ? 'active-pos' : selectedSentiment === 'negative' ? 'active-neg' : 'active-neu';
+    btn.className = 'sent-btn ' + cls;
+  });
+});
+
+async function refreshCount(){
+  try {
+    const res = await fetch('/count');
+    const data = await res.json();
+    totalCount.textContent = data.total ?? 0;
+  } catch(e){ totalCount.textContent = '—'; }
+}
+
+submitBtn.addEventListener('click', async () => {
+  const sentence = sentenceInput.value.trim();
+  msgBox.className = 'msg'; msgBox.textContent = '';
+
+  if (sentence.length < 6) {
+    msgBox.className = 'msg err'; msgBox.textContent = 'اكتب جملة أطول شوي عشان تفيد البيانات.'; return;
+  }
+  if (!selectedSentiment) {
+    msgBox.className = 'msg err'; msgBox.textContent = 'اختر شعورك تجاه الجملة قبل الإرسال.'; return;
+  }
+
+  submitBtn.disabled = true; submitBtn.textContent = 'جاري الإرسال...';
+  try {
+    const res = await fetch('/submit', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ sentence, sentiment: selectedSentiment, topic: currentTopic[0] })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      msgBox.className = 'msg ok'; msgBox.textContent = 'وصلت! شكراً على مساهمتك 🙏';
+      sentenceInput.value = ''; charCount.textContent = '0';
+      selectedSentiment = null;
+      sentBtns.forEach(b => b.className = 'sent-btn');
+      pickTopic();
+      totalCount.textContent = data.total;
+    } else {
+      msgBox.className = 'msg err'; msgBox.textContent = data.message || 'صار خطأ، حاول مرة ثانية.';
+    }
+  } catch(e){
+    msgBox.className = 'msg err'; msgBox.textContent = 'تعذر الاتصال بالخادم، حاول مرة ثانية.';
+  } finally {
+    submitBtn.disabled = false; submitBtn.textContent = 'إرسال الجملة';
+  }
+});
+
+pickTopic();
+refreshCount();
+</script>
+{% endblock %}
