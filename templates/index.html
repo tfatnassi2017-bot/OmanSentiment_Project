@@ -46,6 +46,10 @@
   .footer{ margin-top:20px; padding-top:16px; border-top:1px dashed var(--line); text-align:center; }
   .stat{ font-size:13px; color:var(--ink-soft); }
   .stat b{ color:var(--teal-deep); font-size:16px; }
+  .done-box{ display:none; text-align:center; padding:20px 10px; }
+  .done-box .big-emoji{ font-size:44px; margin-bottom:10px; }
+  .done-box h3{ color:var(--teal-deep); font-size:20px; margin-bottom:10px; }
+  .done-box p{ font-size:14px; color:var(--ink-soft); line-height:1.8; max-width:420px; margin:0 auto; }
 </style>
 {% endblock %}
 
@@ -57,26 +61,37 @@
 </div>
 
 <div class="card">
-  <div class="topic-row">
-    <div>
-      <div class="topic-label" id="topicLabel">الموضوع</div>
-      <div class="prompt" id="promptText">تحميل...</div>
+  <div id="activeForm">
+    <div class="topic-row">
+      <div>
+        <div class="topic-label" id="topicLabel">الموضوع</div>
+        <div class="prompt" id="promptText">تحميل...</div>
+      </div>
+      <button class="shuffle" id="shuffleBtn" type="button">🔄 غيّر الموضوع</button>
     </div>
-    <button class="shuffle" id="shuffleBtn" type="button">🔄 غيّر الموضوع</button>
+
+    <textarea id="sentenceInput" maxlength="240" placeholder="اكتب جملة أو جملتين بلهجتك العمانية هنا..."></textarea>
+    <div class="count"><span id="charCount">0</span>/240</div>
+
+    <div class="sent-label">ما الشعور الذي تعكسه إجابتك تجاه موضوع السؤال؟</div>
+    <div class="sent-row">
+      <button class="sent-btn" data-val="positive" type="button"><span class="emo">😊</span>إيجابي</button>
+      <button class="sent-btn" data-val="neutral" type="button"><span class="emo">😐</span>محايد</button>
+      <button class="sent-btn" data-val="negative" type="button"><span class="emo">😞</span>سلبي</button>
+    </div>
+
+    <button class="submit" id="submitBtn" type="button">إرسال الجملة</button>
+    <div class="msg" id="msgBox"></div>
   </div>
 
-  <textarea id="sentenceInput" maxlength="240" placeholder="اكتب جملة أو جملتين بلهجتك العمانية هنا..."></textarea>
-  <div class="count"><span id="charCount">0</span>/240</div>
-
-  <div class="sent-label">شنو شعورك تجاه اللي كتبته؟</div>
-  <div class="sent-row">
-    <button class="sent-btn" data-val="positive" type="button"><span class="emo">😊</span>إيجابي</button>
-    <button class="sent-btn" data-val="neutral" type="button"><span class="emo">😐</span>محايد</button>
-    <button class="sent-btn" data-val="negative" type="button"><span class="emo">😞</span>سلبي</button>
+  <div class="done-box" id="doneBox">
+    <div class="big-emoji">🎉</div>
+    <h3>شكراً لك، أجبت على جميع الأسئلة!</h3>
+    <p>
+      مساهمتك وصلت وتُقدّر وايد. لو حبيت تساعدنا أكثر، شارك الرابط مع أصحابك —
+      كل صوت جديد يفرق وايد في هذا البحث.
+    </p>
   </div>
-
-  <button class="submit" id="submitBtn" type="button">إرسال الجملة</button>
-  <div class="msg" id="msgBox"></div>
 </div>
 
 <div class="footer">
@@ -96,9 +111,39 @@ const submitBtn = document.getElementById('submitBtn');
 const msgBox = document.getElementById('msgBox');
 const totalCount = document.getElementById('totalCount');
 const sentBtns = document.querySelectorAll('.sent-btn');
+const activeForm = document.getElementById('activeForm');
+const doneBox = document.getElementById('doneBox');
+
+// Which topics this browser has already answered, kept in localStorage so
+// it survives page reloads/closing the tab (but is local to this device —
+// it's not tied to a person, just "this browser has seen these prompts").
+const STORAGE_KEY = 'omani_answered_topics_v1';
+
+function getAnswered(){
+  try { return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')); }
+  catch(e){ return new Set(); }
+}
+function saveAnswered(set){
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(set))); } catch(e){}
+}
+let answered = getAnswered();
+
+// Computed against the CURRENT topics list every time, so if new questions
+// are added to app.py later, someone who already finished the old set will
+// automatically see the new ones instead of staying stuck on "completed".
+function remainingTopics(){
+  return topics.filter(t => !answered.has(t[0]));
+}
+
+function showDone(){
+  activeForm.style.display = 'none';
+  doneBox.style.display = 'block';
+}
 
 function pickTopic(){
-  const t = topics[Math.floor(Math.random()*topics.length)];
+  const remaining = remainingTopics();
+  if (remaining.length === 0) { showDone(); return; }
+  const t = remaining[Math.floor(Math.random() * remaining.length)];
   currentTopic = t;
   topicLabel.textContent = 'الموضوع: ' + t[1];
   promptText.textContent = t[2];
@@ -148,8 +193,19 @@ submitBtn.addEventListener('click', async () => {
       sentenceInput.value = ''; charCount.textContent = '0';
       selectedSentiment = null;
       sentBtns.forEach(b => b.className = 'sent-btn');
-      pickTopic();
       totalCount.textContent = data.total;
+
+      answered.add(currentTopic[0]);
+      saveAnswered(answered);
+
+      if (remainingTopics().length === 0) {
+        // Let them see the "thank you" confirmation for a moment before
+        // switching to the full completion screen, rather than cutting
+        // straight to it.
+        setTimeout(showDone, 1100);
+      } else {
+        pickTopic();
+      }
     } else {
       msgBox.className = 'msg err'; msgBox.textContent = data.message || 'صار خطأ، حاول مرة ثانية.';
     }
