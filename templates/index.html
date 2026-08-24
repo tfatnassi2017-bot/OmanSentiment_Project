@@ -50,17 +50,82 @@
   .done-box .big-emoji{ font-size:44px; margin-bottom:10px; }
   .done-box h3{ color:var(--teal-deep); font-size:20px; margin-bottom:10px; }
   .done-box p{ font-size:14px; color:var(--ink-soft); line-height:1.8; max-width:420px; margin:0 auto; }
+
+  .consent-gate{
+    background:var(--sand-card); border:1.5px solid var(--line); border-radius:16px;
+    padding:20px 20px 22px; margin-bottom:18px;
+  }
+  .consent-gate h2{ color:var(--teal-deep); font-size:18px; margin-bottom:10px; }
+  .consent-gate .section-label{ font-weight:800; color:var(--copper-deep); font-size:13px; margin:14px 0 4px; }
+  .consent-gate p{ font-size:13.5px; line-height:1.9; color:var(--ink); margin:0; }
+  .region-select{
+    width:100%; margin-top:6px; padding:11px 12px; border:1.5px solid var(--line);
+    border-radius:10px; font-family:'Tajawal',sans-serif; font-size:14.5px; color:var(--ink);
+    background:#fff; direction:rtl;
+  }
+  .region-select:focus{ outline:2px solid var(--teal-mid); border-color:var(--teal-mid); }
+  .agree-row{
+    display:flex; align-items:flex-start; gap:8px; margin-top:16px; padding:12px;
+    background:#fff; border:1px solid var(--line); border-radius:10px;
+  }
+  .agree-row input[type=checkbox]{ width:18px; height:18px; margin-top:2px; flex:0 0 auto; cursor:pointer; }
+  .agree-row label{ font-size:13.5px; color:var(--ink); line-height:1.7; cursor:pointer; }
+  .start-btn{
+    width:100%; margin-top:14px; background:var(--copper); color:#fff; border:none;
+    padding:14px; border-radius:12px; font-size:16px; font-weight:800; cursor:pointer;
+  }
+  .start-btn:disabled{ background:#D8C9AC; cursor:not-allowed; }
+  .start-btn:not(:disabled):hover{ background:var(--copper-deep); }
+  .gate-err{ text-align:center; font-size:13px; color:var(--neg); font-weight:700; margin-top:8px; min-height:16px; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="consent">
-  <b>قبل ما تبدأ:</b> إجابتك بتكون جزء من بيانات بحثية مفتوحة (تحليل لهجات ومشاعر) ينشرها الباحث ضمن رسالة دكتوراه.
-  لا تكتب اسمك أو أي معلومة تعرّف فيك شخصياً. المشاركة اختيارية بالكامل، ولك الحق تتوقف بأي وقت.
-  اكتب بلهجتك الطبيعية تماماً — زي ما تحچي مع أصحابك.
+<div class="consent-gate" id="consentGate">
+  <h2>قبل ما تبدأ — بيان الموافقة على المشاركة</h2>
+
+  <div class="section-label">الغرض من الدراسة</div>
+  <p>
+    هذا التطبيق جزء من مشروع بحثي أكاديمي (رسالة دكتوراه) يهدف لبناء أول قاعدة بيانات مفتوحة لجمل حقيقية
+    باللهجة العُمانية مع تصنيف مشاعرها (إيجابي / محايد / سلبي)، لتطوير أدوات تحليل نصوص تفهم اللهجة العُمانية.
+  </p>
+
+  <div class="section-label">البيانات اللي نجمعها</div>
+  <p>
+    الجملة اللي تكتبها بلهجتك، تصنيف الشعور اللي تختاره، والمحافظة اللي تختارها أدناه.
+    ما نطلب اسمك، رقم هاتفك، بريدك الإلكتروني، أو أي معلومة تعرّف فيك شخصياً.
+  </p>
+
+  <div class="section-label">كيف تُستخدم بياناتك</div>
+  <p>
+    البيانات مجهولة المصدر بالكامل، تُستخدم في التحليل الأكاديمي، وقد تُنشر كجزء من قاعدة بيانات بحثية
+    مفتوحة يستفيد منها باحثون آخرون.
+  </p>
+
+  <div class="section-label">حقك في الانسحاب</div>
+  <p>
+    المشاركة اختيارية بالكامل، ولك الحق تتوقف عن المشاركة بأي وقت بدون أي التزام. بما إن البيانات
+    مجهولة المصدر من البداية، ما نقدر نحذف مساهمة معينة بعد إرسالها لأنه ما فيه أي طريقة نربطها فيك.
+  </p>
+
+  <div class="section-label">المحافظة</div>
+  <select class="region-select" id="regionSelect">
+    <option value="" disabled selected>-- اختر محافظتك --</option>
+    {% for key, label in regions %}
+    <option value="{{ key }}">{{ label }}</option>
+    {% endfor %}
+  </select>
+
+  <div class="agree-row">
+    <input type="checkbox" id="agreeCheckbox">
+    <label for="agreeCheckbox">أوافق على المشاركة طوعياً وفق الشروط الموضحة أعلاه.</label>
+  </div>
+
+  <button class="start-btn" id="startBtn" type="button" disabled>ابدأ المشاركة</button>
+  <div class="gate-err" id="gateErr"></div>
 </div>
 
-<div class="card">
+<div class="card" id="mainCard" style="display:none;">
   <div id="activeForm">
     <div class="topic-row">
       <div>
@@ -100,6 +165,7 @@
 
 <script>
 const topics = {{ topics | tojson }};
+const validRegionKeys = new Set({{ regions | map(attribute=0) | list | tojson }});
 let currentTopic = null;
 let selectedSentiment = null;
 
@@ -113,7 +179,51 @@ const totalCount = document.getElementById('totalCount');
 const sentBtns = document.querySelectorAll('.sent-btn');
 const activeForm = document.getElementById('activeForm');
 const doneBox = document.getElementById('doneBox');
+const consentGate = document.getElementById('consentGate');
+const mainCard = document.getElementById('mainCard');
+const regionSelect = document.getElementById('regionSelect');
+const agreeCheckbox = document.getElementById('agreeCheckbox');
+const startBtn = document.getElementById('startBtn');
+const gateErr = document.getElementById('gateErr');
 
+// --- Consent + region gate -------------------------------------------
+// Asked once per device, then remembered in localStorage so returning
+// visitors go straight to the questions (participation isn't limited to
+// a single submission — this only gates the one-time consent step).
+const CONSENT_KEY = 'omani_consent_given_v1';
+const REGION_KEY = 'omani_participant_region_v1';
+
+function getStoredRegion(){
+  const r = localStorage.getItem(REGION_KEY);
+  return validRegionKeys.has(r) ? r : null;
+}
+function hasConsented(){
+  return localStorage.getItem(CONSENT_KEY) === 'true' && !!getStoredRegion();
+}
+function enterMainForm(){
+  consentGate.style.display = 'none';
+  mainCard.style.display = 'block';
+  pickTopic();
+}
+
+function updateStartBtn(){
+  startBtn.disabled = !(agreeCheckbox.checked && regionSelect.value);
+}
+regionSelect.addEventListener('change', updateStartBtn);
+agreeCheckbox.addEventListener('change', updateStartBtn);
+
+startBtn.addEventListener('click', () => {
+  if (!agreeCheckbox.checked || !regionSelect.value) {
+    gateErr.textContent = 'الرجاء اختيار المحافظة والموافقة على الشروط أولاً.';
+    return;
+  }
+  gateErr.textContent = '';
+  localStorage.setItem(CONSENT_KEY, 'true');
+  localStorage.setItem(REGION_KEY, regionSelect.value);
+  enterMainForm();
+});
+
+// --- Answered-topic tracking (unchanged from before) ------------------
 // Which topics this browser has already answered, kept in localStorage so
 // it survives page reloads/closing the tab (but is local to this device —
 // it's not tied to a person, just "this browser has seen these prompts").
@@ -180,12 +290,22 @@ submitBtn.addEventListener('click', async () => {
     msgBox.className = 'msg err'; msgBox.textContent = 'اختر شعورك تجاه الجملة قبل الإرسال.'; return;
   }
 
+  const participantRegion = getStoredRegion();
+  if (!participantRegion) {
+    // Shouldn't normally happen (gate enforces this first), but guards
+    // against a cleared/corrupted localStorage mid-session.
+    msgBox.className = 'msg err'; msgBox.textContent = 'صار خطأ بمعلومات الموافقة، أعد تحميل الصفحة.'; return;
+  }
+
   submitBtn.disabled = true; submitBtn.textContent = 'جاري الإرسال...';
   try {
     const res = await fetch('/submit', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ sentence, sentiment: selectedSentiment, topic: currentTopic[0] })
+      body: JSON.stringify({
+        sentence, sentiment: selectedSentiment, topic: currentTopic[0],
+        participant_region: participantRegion
+      })
     });
     const data = await res.json();
     if (data.ok) {
@@ -216,7 +336,12 @@ submitBtn.addEventListener('click', async () => {
   }
 });
 
-pickTopic();
+// --- Init ---------------------------------------------------------------
+if (hasConsented()) {
+  enterMainForm();
+} else {
+  consentGate.style.display = 'block';
+}
 refreshCount();
 </script>
 {% endblock %}
