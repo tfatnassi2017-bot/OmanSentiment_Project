@@ -72,10 +72,29 @@
 </div>
 
 <div class="card">
+  <div style="font-weight:800; color:var(--teal-deep); margin-bottom:10px; font-size:14px;">التوزيع حسب المحافظة</div>
+  {% if by_region %}
+  <table>
+    {% for row in by_region %}
+    <tr>
+      <td style="width:40%;">
+        {{ region_labels.get(row.participant_region, row.participant_region) }}
+        <div class="bar-wrap"><div class="bar" style="width:{{ (row.c / total * 100) if total else 0 }}%;"></div></div>
+      </td>
+      <td style="width:10%;">{{ row.c }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <div class="empty">ما فيه بيانات بعد.</div>
+  {% endif %}
+</div>
+
+<div class="card">
   <div style="font-weight:800; color:var(--teal-deep); margin-bottom:10px; font-size:14px;">آخر 30 مساهمة (لمراجعة الجودة)</div>
   {% if recent %}
   <table>
-    <tr><th>الجملة</th><th>الشعور</th><th>الموضوع</th><th></th></tr>
+    <tr><th>الجملة</th><th>الشعور</th><th>الموضوع</th><th>المحافظة</th><th></th></tr>
     {% for r in recent %}
     <tr>
       <td class="sentence-cell">
@@ -84,6 +103,7 @@
       </td>
       <td><span class="tag {{ r.sentiment }}">{{ r.sentiment }}</span></td>
       <td>{{ topic_labels.get(r.topic, r.topic) }}</td>
+      <td>{{ region_labels.get(r.participant_region, r.participant_region or '—') }}</td>
       <td>
         <form method="POST" action="{{ url_for('admin_delete', response_id=r.id) }}"
               onsubmit="return confirm('حذف هذا الإدخال نهائياً؟');">
