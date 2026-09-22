@@ -285,6 +285,9 @@ def submit():
     if len(sentence) < 6 or len(sentence) > 500:
         return jsonify({"ok": False, "error": "bad_length",
                          "message": "اكتب جملة بطول مناسب (6-500 حرف)."}), 400
+    if len(sentence.split()) < 3:
+        return jsonify({"ok": False, "error": "too_few_words",
+                         "message": "اكتب ٣ كلمات على الأقل."}), 400
     if not is_mostly_arabic(sentence):
         return jsonify({"ok": False, "error": "not_arabic",
                          "message": "الرجاء الكتابة بالعربية (لهجتك العمانية)."}), 400
